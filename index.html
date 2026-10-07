@@ -56,7 +56,7 @@ textarea.note{display:block;min-height:0;height:35px;font:inherit;background:var
 .nw.multi .tg{display:block}
 .nw .tg:hover{background:var(--chip)}
 .nw .tg::before{content:'';position:absolute;left:10px;top:8px;width:6px;height:6px;border-right:1.5px solid var(--mute);border-bottom:1.5px solid var(--mute);transform:rotate(45deg);transition:transform .22s ease,top .22s ease}
-.nw:focus-within .tg::before{transform:rotate(225deg);top:12px}
+.nw.editing .tg::before,.nw.expanded .tg::before{transform:rotate(225deg);top:12px}
 textarea.note{transition:height .24s cubic-bezier(.2,.7,.2,1),border-color .18s ease}
 .nw.multi textarea.note{padding-right:30px}
 @media (prefers-reduced-motion:reduce){textarea.note,.nw .tg::before{transition:none}}
@@ -90,9 +90,14 @@ details[data-animating]{overflow:hidden}
 .addbtn{gap:10px;align-items:center}
 .note-display{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin:2px 0;min-height:35px}
 .note-display a{color:var(--acc);text-decoration:underline;text-underline-offset:3px}
-.nw:not(.editing) textarea.note,.nw:not(.editing) .tg{display:none}
-.nw.editing .note-display,.nw.editing .note-edit{display:none}
-.note-edit{margin-bottom:6px}
+.nw:not(.editing) textarea.note{display:none}
+.nw.editing .note-display{display:none}
+.note-display{cursor:text}
+.note-display{height:35px;min-height:35px;overflow:hidden}
+.nw.multi .note-display{padding-right:36px}
+.nw.expanded .note-display{height:auto}
+.nw.multi .tg::before{border-color:#2563eb}
+@media(prefers-color-scheme:dark){.nw.multi .tg::before{border-color:#60a5fa}}
 </style>
 </head>
 <body>
@@ -222,6 +227,8 @@ function render(){
     :(items.length?items.map(l=>rowHtml(l)).join(''):'<div class="empty">Nema leadova u ovom pregledu.</div>');
 }
 
+const originalRender=render;render=function(){originalRender();document.querySelectorAll('#list .nw').forEach(syncNote)};
+
 const fmtFull=d=>d.slice(8,10)+'.'+d.slice(5,7)+'.'+d.slice(0,4)+'.';
 function groupByDate(it,dateField='last',showSent=true){
   const by={};it.forEach(l=>{const k=l[dateField]||'';(by[k]=by[k]||[]).push(l)});
@@ -232,12 +239,12 @@ const isMulti=n=>(n||'').includes('\n')||(n||'').length>60;
 const tagOf=l=>l.stage==='Prva poruka'?'Kontaktiran':l.stage.replace('Follow-up ','Follow-Up #');
 function sviHtml(l){
   return '<div class="row" data-id="'+l.id+'"><div class="top"><b>'+esc(l.name)+'</b><span class="chip">'+esc(tagOf(l))+'</span></div>'
-  +'<div class="nw'+(isMulti(l.note)?' multi':'')+'"><div class="note-display">'+notePreview(l.note)+'</div><button type="button" class="ghost note-edit">Uredi belešku</button><textarea class="note" data-f="note" rows="1" placeholder="Beleška">\n'+esc(l.note||'')+'</textarea><button type="button" class="tg" tabindex="-1" aria-label="Otvori ili zatvori belešku"></button></div></div>';
+  +'<div class="nw'+(isMulti(l.note)?' multi':'')+'"><div class="note-display" tabindex="0" aria-label="Beleška, pritisnite Enter za uređivanje">'+notePreview(l.note)+'</div><textarea class="note" data-f="note" rows="1" placeholder="Beleška">\n'+esc(l.note||'')+'</textarea><button type="button" class="tg" aria-expanded="false" aria-label="Otvori ili zatvori belešku"></button></div></div>';
 }
 function rejHtml(l){
   const c=l.closed||'',r=l.reason||'';
   return '<div class="row" data-id="'+l.id+'"><div class="top"><button class="x" data-a="del" title="Obriši" aria-label="Obriši">×</button><span class="grab" title="Prevuci karticu">⠿</span><b>'+esc(l.name)+'</b>'+(view==='svi'?'<span class="chip">Rejected</span>':'')+'</div>'
-  +'<div class="meta"><span>Datum: <input type="date" data-f="closed" value="'+c+'">'+(c?' ('+ago(c)+')':' <span class="tod">upiši datum</span>')+'</span>'
+  +'<div class="meta">'
   +'<span>Način odbijanja: <select data-f="reason"><option value="">Izaberi</option>'+['Seen','Odbio'].map(o=>'<option'+(o===r?' selected':'')+'>'+o+'</option>').join('')+'</select></span></div></div>';
 }
 function rowHtml(l,showSent){
@@ -253,7 +260,7 @@ function rowHtml(l,showSent){
   +'<div class="meta">'
   +(showSent?'<span>Datum: <input type="date" data-f="last" value="'+(l.last||'')+'">'+(l.last?' ('+ago(l.last)+')':' <span class="tod">upiši datum</span>')+'</span>':'')
   +(l.stage==='Rejected'||l.stage==='Won'?'<span>'+(l.stage==='Rejected'?'Datum odbijanja':'Datum won')+': <input type="date" data-f="closed" value="'+(l.closed||'')+'">'+(l.closed?' ('+ago(l.closed)+')':' <span class="tod">upiši datum</span>')+'</span>':'')+'</div>'
-  +'<div class="nw'+(isMulti(l.note)?' multi':'')+'"><div class="note-display">'+notePreview(l.note)+'</div><button type="button" class="ghost note-edit">Uredi belešku</button><textarea class="note" data-f="note" rows="1" placeholder="Beleška">\n'+esc(l.note||'')+'</textarea><button type="button" class="tg" tabindex="-1" aria-label="Otvori ili zatvori belešku"></button></div>'
+  +'<div class="nw'+(isMulti(l.note)?' multi':'')+'"><div class="note-display" tabindex="0" aria-label="Beleška, pritisnite Enter za uređivanje">'+notePreview(l.note)+'</div><textarea class="note" data-f="note" rows="1" placeholder="Beleška">\n'+esc(l.note||'')+'</textarea><button type="button" class="tg" aria-expanded="false" aria-label="Otvori ili zatvori belešku"></button></div>'
   +'<div class="btns">'
   +(sendLbl?'<button class="b p" data-a="send">'+sendLbl+'</button>':'')
   +(l.stage!=='Rejected'&&l.stage!=='Prospect'&&l.stage!=='Won'?'<button class="b" data-a="no">Rejected</button>':'')
@@ -283,9 +290,9 @@ document.getElementById('tabs').onclick=e=>{
       {duration:180,easing:'cubic-bezier(.2,.7,.2,1)'});
   }
 };
-document.getElementById('list').onclick=e=>{const edit=e.target.closest('.note-edit');if(edit){const w=edit.closest('.nw');w.classList.add('editing');w.querySelector('textarea').focus();return}const b=e.target.closest('[data-a]');if(!b)return;const l=leads.find(x=>x.id===b.closest('.row').dataset.id);if(l)act(l,b.dataset.a)};
+document.getElementById('list').onclick=e=>{const display=e.target.closest('.note-display');if(display&&!e.target.closest('a')){const w=display.closest('.nw');w.classList.add('editing');w.querySelector('textarea').focus();return}const b=e.target.closest('[data-a]');if(!b)return;const l=leads.find(x=>x.id===b.closest('.row').dataset.id);if(l)act(l,b.dataset.a)};
 document.getElementById('list').onchange=e=>{const f=e.target.dataset.f;if(!f)return;const l=leads.find(x=>x.id===e.target.closest('.row').dataset.id);if(!l)return;
-  if(f==='note'){snap();l.note=e.target.value;save();const w=e.target.closest('.nw');if(w)w.classList.toggle('multi',isMulti(l.note));return}
+  if(f==='note'){snap();l.note=e.target.value;save();const w=e.target.closest('.nw');if(w){w.querySelector('.note-display').innerHTML=notePreview(l.note);syncNote(w)};return}
   snap();l[f]=e.target.value;if(f==='last'&&l.stage==='Prva poruka'){l.first=l.last;l.next=l.last?addDays(l.last,DAYS['Follow-up 1']):''}
   if(f==='stage'&&!isAct(l)&&l.stage!=='Prospect')l.next='';
   if(f==='stage'){if(l.stage==='Rejected'||l.stage==='Won'){if(!l.closed)l.closed=today()}else l.closed=''}
@@ -367,17 +374,30 @@ document.getElementById('list').addEventListener('pointerdown',e=>{
   document.addEventListener('pointerup',dragEnd);
   document.addEventListener('pointercancel',dragEnd);
 });
+document.getElementById('list').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.classList.contains('note-display')){e.preventDefault();const w=e.target.closest('.nw');w.classList.add('editing');w.querySelector('textarea').focus()}});
 const expand=t=>{t.style.height=Math.max(35,t.scrollHeight)+'px'};
 const fit=t=>{t.style.transition='none';t.style.height='auto';t.style.height=t.scrollHeight+'px';requestAnimationFrame(()=>{t.style.transition=''})};
 document.getElementById('list').addEventListener('focusin',e=>{if(e.target.classList&&e.target.classList.contains('note'))expand(e.target)});
-document.getElementById('list').addEventListener('focusout',e=>{const t=e.target;if(t.classList&&t.classList.contains('note')){t.style.height='';t.scrollTop=0;const w=t.closest('.nw');if(w){w.querySelector('.note-display').innerHTML=notePreview(t.value);w.classList.remove('editing')}}});
+document.getElementById('list').addEventListener('focusout',e=>{const t=e.target;if(t.classList&&t.classList.contains('note')){t.style.height='';t.scrollTop=0;const w=t.closest('.nw');if(w){w.querySelector('.note-display').innerHTML=notePreview(t.value);w.classList.remove('editing','expanded');syncNote(w)}}});
 document.getElementById('list').addEventListener('input',e=>{if(e.target.classList&&e.target.classList.contains('note'))fit(e.target)});
 document.getElementById('list').addEventListener('keydown',e=>{
   if(e.key==='Enter'&&!e.shiftKey&&e.target.classList&&e.target.classList.contains('note')){e.preventDefault();e.target.blur()}
 });
-let tgOpen=false;
-document.getElementById('list').addEventListener('mousedown',e=>{const b=e.target.closest&&e.target.closest('.tg');if(!b)return;e.preventDefault();const t=b.parentNode.querySelector('textarea');tgOpen=document.activeElement===t});
-document.getElementById('list').addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('.tg');if(!b)return;const t=b.parentNode.querySelector('textarea');if(!t)return;if(tgOpen)t.blur();else t.focus();tgOpen=false});
+function syncNote(w){
+  const display=w.querySelector('.note-display'),text=w.querySelector('textarea').value;
+  const wasExpanded=w.classList.contains('expanded');w.classList.remove('expanded');
+  w.classList.toggle('multi',text.includes('\n')||display.scrollHeight>35);
+  if(wasExpanded)w.classList.add('expanded');
+  w.querySelector('.tg').setAttribute('aria-expanded',String(w.classList.contains('expanded')));
+}
+document.getElementById('list').addEventListener('mousedown',e=>{if(e.target.closest('.tg'))e.preventDefault()});
+document.getElementById('list').addEventListener('click',e=>{
+  const button=e.target.closest('.tg');if(!button)return;
+  const w=button.closest('.nw');
+  if(w.classList.contains('editing')){w.querySelector('textarea').blur();return}
+  w.classList.toggle('expanded');button.setAttribute('aria-expanded',String(w.classList.contains('expanded')));
+});
+new ResizeObserver(()=>document.querySelectorAll('#list .nw:not(.editing)').forEach(syncNote)).observe(document.getElementById('list'));
 document.getElementById('undo').onclick=undo;
 load();
 {const n=leads.length;leads=leads.filter(l=>l.id!=='test-fu');if(leads.length!==n)save()}
