@@ -88,6 +88,11 @@ details[data-animating]{overflow:hidden}
 .add-success{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:12px 14px;border:1px solid var(--acc);border-left:4px solid var(--acc);border-radius:8px;background:color-mix(in srgb,var(--acc) 10%,var(--panel));color:var(--ink);font-size:14px}
 .add-success:empty{display:none}
 .addbtn{gap:10px;align-items:center}
+.note-display{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin:2px 0;min-height:35px}
+.note-display a{color:var(--acc);text-decoration:underline;text-underline-offset:3px}
+.nw:not(.editing) textarea.note,.nw:not(.editing) .tg{display:none}
+.nw.editing .note-display,.nw.editing .note-edit{display:none}
+.note-edit{margin-bottom:6px}
 </style>
 </head>
 <body>
@@ -148,6 +153,21 @@ const addDays=(s,n)=>{const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+n);r
 const diff=s=>Math.round((new Date(today()+'T00:00:00')-new Date(s+'T00:00:00'))/864e5);
 const fmt=s=>s?s.slice(8,10)+'.'+s.slice(5,7)+'.':'nije postavljeno';
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function noteLinks(value){
+  const text=String(value||'');let result='',position=0;
+  const pattern=/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+  for(const match of text.matchAll(pattern)){
+    let url=match[0].replace(/[.,;!?]+$/,'');
+    while(url.endsWith(')')&&(url.match(/\)/g)||[]).length>(url.match(/\(/g)||[]).length)url=url.slice(0,-1);
+    result+=esc(text.slice(position,match.index));
+    const href=/^www\./i.test(url)?'https://'+url:url;
+    result+='<a href="'+esc(href)+'" target="_blank" rel="noopener noreferrer">'+esc(url)+'</a>';
+    position=match.index+url.length;
+  }
+  return result+esc(text.slice(position));
+}
+function notePreview(value){return noteLinks(value)||'<span class="small">Beleška</span>'}
+
 const uid=()=>Math.random().toString(36).slice(2,10);
 const ago=s=>{if(!s)return'';const d=diff(s);return d===0?'danas':d===1?'juče':'pre '+d+' dana'};
 
@@ -212,7 +232,7 @@ const isMulti=n=>(n||'').includes('\n')||(n||'').length>60;
 const tagOf=l=>l.stage==='Prva poruka'?'Kontaktiran':l.stage.replace('Follow-up ','Follow-Up #');
 function sviHtml(l){
   return '<div class="row" data-id="'+l.id+'"><div class="top"><b>'+esc(l.name)+'</b><span class="chip">'+esc(tagOf(l))+'</span></div>'
-  +'<div class="nw'+(isMulti(l.note)?' multi':'')+'"><textarea class="note" data-f="note" rows="1" placeholder="Beleška">\n'+esc(l.note||'')+'</textarea><button type="button" class="tg" tabindex="-1" aria-label="Otvori ili zatvori belešku"></button></div></div>';
+  +'<div class="nw'+(isMulti(l.note)?' multi':'')+'"><div class="note-display">'+notePreview(l.note)+'</div><button type="button" class="ghost note-edit">Uredi belešku</button><textarea class="note" data-f="note" rows="1" placeholder="Beleška">\n'+esc(l.note||'')+'</textarea><button type="button" class="tg" tabindex="-1" aria-label="Otvori ili zatvori belešku"></button></div></div>';
 }
 function rejHtml(l){
   const c=l.closed||'',r=l.reason||'';
@@ -233,7 +253,7 @@ function rowHtml(l,showSent){
   +'<div class="meta">'
   +(showSent?'<span>Datum: <input type="date" data-f="last" value="'+(l.last||'')+'">'+(l.last?' ('+ago(l.last)+')':' <span class="tod">upiši datum</span>')+'</span>':'')
   +(l.stage==='Rejected'||l.stage==='Won'?'<span>'+(l.stage==='Rejected'?'Datum odbijanja':'Datum won')+': <input type="date" data-f="closed" value="'+(l.closed||'')+'">'+(l.closed?' ('+ago(l.closed)+')':' <span class="tod">upiši datum</span>')+'</span>':'')+'</div>'
-  +'<div class="nw'+(isMulti(l.note)?' multi':'')+'"><textarea class="note" data-f="note" rows="1" placeholder="Beleška">\n'+esc(l.note||'')+'</textarea><button type="button" class="tg" tabindex="-1" aria-label="Otvori ili zatvori belešku"></button></div>'
+  +'<div class="nw'+(isMulti(l.note)?' multi':'')+'"><div class="note-display">'+notePreview(l.note)+'</div><button type="button" class="ghost note-edit">Uredi belešku</button><textarea class="note" data-f="note" rows="1" placeholder="Beleška">\n'+esc(l.note||'')+'</textarea><button type="button" class="tg" tabindex="-1" aria-label="Otvori ili zatvori belešku"></button></div>'
   +'<div class="btns">'
   +(sendLbl?'<button class="b p" data-a="send">'+sendLbl+'</button>':'')
   +(l.stage!=='Rejected'&&l.stage!=='Prospect'&&l.stage!=='Won'?'<button class="b" data-a="no">Rejected</button>':'')
@@ -263,7 +283,7 @@ document.getElementById('tabs').onclick=e=>{
       {duration:180,easing:'cubic-bezier(.2,.7,.2,1)'});
   }
 };
-document.getElementById('list').onclick=e=>{const b=e.target.closest('[data-a]');if(!b)return;const l=leads.find(x=>x.id===b.closest('.row').dataset.id);if(l)act(l,b.dataset.a)};
+document.getElementById('list').onclick=e=>{const edit=e.target.closest('.note-edit');if(edit){const w=edit.closest('.nw');w.classList.add('editing');w.querySelector('textarea').focus();return}const b=e.target.closest('[data-a]');if(!b)return;const l=leads.find(x=>x.id===b.closest('.row').dataset.id);if(l)act(l,b.dataset.a)};
 document.getElementById('list').onchange=e=>{const f=e.target.dataset.f;if(!f)return;const l=leads.find(x=>x.id===e.target.closest('.row').dataset.id);if(!l)return;
   if(f==='note'){snap();l.note=e.target.value;save();const w=e.target.closest('.nw');if(w)w.classList.toggle('multi',isMulti(l.note));return}
   snap();l[f]=e.target.value;if(f==='last'&&l.stage==='Prva poruka'){l.first=l.last;l.next=l.last?addDays(l.last,DAYS['Follow-up 1']):''}
@@ -350,7 +370,7 @@ document.getElementById('list').addEventListener('pointerdown',e=>{
 const expand=t=>{t.style.height=Math.max(35,t.scrollHeight)+'px'};
 const fit=t=>{t.style.transition='none';t.style.height='auto';t.style.height=t.scrollHeight+'px';requestAnimationFrame(()=>{t.style.transition=''})};
 document.getElementById('list').addEventListener('focusin',e=>{if(e.target.classList&&e.target.classList.contains('note'))expand(e.target)});
-document.getElementById('list').addEventListener('focusout',e=>{const t=e.target;if(t.classList&&t.classList.contains('note')){t.style.height='';t.scrollTop=0}});
+document.getElementById('list').addEventListener('focusout',e=>{const t=e.target;if(t.classList&&t.classList.contains('note')){t.style.height='';t.scrollTop=0;const w=t.closest('.nw');if(w){w.querySelector('.note-display').innerHTML=notePreview(t.value);w.classList.remove('editing')}}});
 document.getElementById('list').addEventListener('input',e=>{if(e.target.classList&&e.target.classList.contains('note'))fit(e.target)});
 document.getElementById('list').addEventListener('keydown',e=>{
   if(e.key==='Enter'&&!e.shiftKey&&e.target.classList&&e.target.classList.contains('note')){e.preventDefault();e.target.blur()}
