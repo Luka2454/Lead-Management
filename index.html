@@ -197,7 +197,7 @@ function resetAll(){snap();seedLeads();view='prospect';save();render()}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(leads))}catch(e){}}
 
 const isAct=l=>ACTIVE.includes(l.stage);
-const DROP={prospect:'Prospect',aktivni:'Prva poruka',danas:'Follow-up 1',zainteresovan:'Zainteresovan',odbili:'Rejected',won:'Won'};
+const DROP={prospect:'Prospect',aktivni:'Prva poruka',danas:'Follow-up 1',zainteresovan:'Zainteresovan',future:'Future follow-up',odbili:'Rejected',won:'Won'};
 const VIEWS=[
 ['prospect','Prospect',l=>l.stage==='Prospect',0],
 ['aktivni','Kontaktiran',l=>l.stage==='Prva poruka',0],
@@ -205,6 +205,7 @@ const VIEWS=[
 ['zainteresovan','Zainteresovan',l=>l.stage==='Zainteresovan',0],
 ['odbili','Rejected',l=>l.stage==='Rejected',0],
 ['won','Won',l=>l.stage==='Won',0],
+['future','Future follow-up',l=>l.stage==='Future follow-up',0],
 ['svi','Svi',l=>true,0]];
 
 function render(){
@@ -223,6 +224,7 @@ function render(){
   document.getElementById('list').innerHTML=view==='danas'
     ?FU.map(g=>{const it=items.filter(l=>l.stage===g);return '<div class="zone" data-drop="'+g+'"><h2 class="grp">'+LBL[g]+' <span class="small">'+it.length+'</span></h2>'+(it.length?groupByDate(it):'<div class="small">Nema leadova.</div>')+'</div>'}).join('')
     :view==='prospect'&&items.length?groupByDate(items,'added',false)
+    :view==='future'&&items.length?groupByDate(items,'next',false)
     :view==='aktivni'&&items.length?groupByDate(items)
     :(items.length?items.map(l=>rowHtml(l)).join(''):'<div class="empty">Nema leadova u ovom pregledu.</div>');
 }
@@ -259,10 +261,12 @@ function rowHtml(l,showSent){
   +'<div class="top"><button class="x" data-a="del" title="Obriši" aria-label="Obriši">×</button><span class="grab" title="Prevuci karticu">⠿</span><b>'+esc(l.name)+'</b>'+(view==='svi'?'<span class="chip">'+l.stage+'</span>'+(l.status?'<span class="chip">'+l.status+'</span>':''):'')+'</div>'
   +'<div class="meta">'
   +(showSent?'<span>Datum: <input type="date" data-f="last" value="'+(l.last||'')+'">'+(l.last?' ('+ago(l.last)+')':' <span class="tod">upiši datum</span>')+'</span>':'')
+  +(l.stage==='Future follow-up'?'<span>Podsetnik za follow-up: <input type="date" data-f="next" value="'+(l.next||'')+'">'+(late?' <span class="hot">kasni '+diff(l.next)+' d</span>':tod?' <span class="tod">danas</span>':!l.next?' <span class="tod">upiši datum</span>':'')+'</span>':'')
   +(l.stage==='Rejected'||l.stage==='Won'?'<span>'+(l.stage==='Rejected'?'Datum odbijanja':'Datum won')+': <input type="date" data-f="closed" value="'+(l.closed||'')+'">'+(l.closed?' ('+ago(l.closed)+')':' <span class="tod">upiši datum</span>')+'</span>':'')+'</div>'
   +'<div class="nw'+(isMulti(l.note)?' multi':'')+'"><div class="note-display" tabindex="0" aria-label="Beleška, pritisnite Enter za uređivanje">'+notePreview(l.note)+'</div><textarea class="note" data-f="note" rows="1" placeholder="Beleška">\n'+esc(l.note||'')+'</textarea><button type="button" class="tg" aria-expanded="false" aria-label="Otvori ili zatvori belešku"></button></div>'
   +'<div class="btns">'
   +(sendLbl?'<button class="b p" data-a="send">'+sendLbl+'</button>':'')
+  +((FU.includes(l.stage)||l.stage==='Prva poruka'||l.stage==='Zainteresovan')?'<button class="b" data-a="future">Future follow-up</button>':'')
   +(l.stage!=='Rejected'&&l.stage!=='Prospect'&&l.stage!=='Won'?'<button class="b" data-a="no">Rejected</button>':'')
   +((isAct(l)||l.stage==='Zainteresovan')?'<button class="b" data-a="won">Won</button>':'')
   +'</div></div>';
@@ -273,6 +277,7 @@ function act(l,a){
   if(a==='send'){const cur=l.stage,nx=NEXT[cur];if(!nx)return;if(cur==='Prospect'&&!l.first)l.first=t;l.stage=nx;l.last=t;l.status='Poslato';const s2=NEXT[nx];l.next=s2&&DAYS[s2]?addDays(l.first||t,DAYS[s2]):''}
   else if(a==='read')l.status='Pročitano';
   else if(a==='reply'){l.status='Odgovorio';l.stage='Zainteresovan';l.last=t;l.next='';l.closed=''}
+  else if(a==='future'){l.stage='Future follow-up';l.next='';l.closed=''}
   else if(a==='no'){l.stage='Rejected';l.next='';l.closed=t}
   else if(a==='won'){l.stage='Won';l.next='';l.closed=t}
   else if(a==='del'){leads=leads.filter(x=>x!==l)}
